@@ -187,12 +187,12 @@ video_update :: proc(state: ^Video_State, surface: rl.Texture) {
         return
     }
 
-    //log.info(
-    //    queue_size(&state.packets),
-    //    queue_size(&state.packets2),
-    //    queue_size(v_frames),
-    //    queue_size(a_frames),
-    //)
+    log.info(
+        queue_size(&state.packets),
+        queue_size(&state.packets2),
+        queue_size(v_frames),
+        queue_size(a_frames),
+    )
 
     // Audio
     if !queue_empty(a_frames) && rl.IsAudioStreamProcessed(state.audio_stream) {
@@ -273,7 +273,7 @@ get_yt_format :: proc(
     }
 
     files := strings.split_lines(string(stdout), context.temp_allocator)
-    is_split^ = len(files) > 1
+    is_split^ = len(files) > 2 // there is always an empty element because of trailing newline
 
     video := strings.clone_to_cstring(files[0], context.temp_allocator)
 
@@ -415,7 +415,7 @@ video_conversion_init :: proc(state: ^Video_State) {
 
 YT_DOMAINS :: []string{"https://www.youtu", "https://youtu", "youtu"}
 video_state_init :: proc(state: ^Video_State, video_file: string, yt_args: []string) {
-    avutil.log_set_level(.ERROR)
+    avutil.log_set_level(.QUIET)
     state.filename = strings.clone_to_cstring(video_file)
     format_ctx, format_ctx2: ^Format_Context
     // check for youtube domain
@@ -463,6 +463,7 @@ video_state_init :: proc(state: ^Video_State, video_file: string, yt_args: []str
 
     // spawn threads
     thread.run_with_poly_data(state, io_thread_func, context)
+    // buffer packets
     thread.run_with_poly_data(state, decode_thread_func, context)
     state.video_active = true
 }
@@ -500,7 +501,6 @@ audio_init :: proc(state: ^Video_State) {
     a_frames := &state.a_decoder.frames
     if sample_count == 0 {
         // make sure we have some frames
-        for queue_size(a_frames) < 10 {}
         for i := a_frames.rindex; i < a_frames.windex; i += 1 {
             frame := a_frames.items[i]
             sample_count = max(sample_count, frame.nb_samples)

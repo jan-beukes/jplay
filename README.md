@@ -1,6 +1,7 @@
 # Jplay
 A simple video player
-capable of most formats supported by ffmpegs (so everything)
+
+capable of most formats supported by ffmpeg (so everything)
 
 can integrate with yt-dlp to stream video from youtube
 

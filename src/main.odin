@@ -19,6 +19,7 @@ MAX_VOLUME :: 5.0
 // Video Player state
 volume: f32 = 1.0
 muted := false
+buffering := false
 paused := false
 
 // flag
@@ -37,11 +38,35 @@ Options:
     )
 }
 
+// ui
+PAUSE_SCALE :: 0.1
+
+render_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
+
+
+    // buffering :)
+    if buffering {
+        size := rect.height * PAUSE_SCALE
+
+        time := rl.GetTime()
+        start_angle := f32((time - f64(int(time))) * 360)
+        end_angle := f32(start_angle + 270)
+        center := rl.Vector2{(rect.x + rect.width) / 2, (rect.y + rect.height) / 2}
+        rl.DrawRing(center, size, size - 0.1 * size, start_angle, end_angle, 20, rl.RED)
+    }
+}
+
 main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
     rl.PlayAudioStream(state.audio_stream)
     for !rl.WindowShouldClose() {
-        if state.video_active {
+        if state.video_active && !buffering {
             video_update(state, surface)
+        }
+        // buffering for split youtube steams
+        if !buffering && state.is_split && queue_empty(&state.packets2) {
+            buffering = true
+        } else if buffering && queue_full(&state.packets2) {
+            buffering = false
         }
 
         //---Events---
@@ -81,6 +106,8 @@ main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
         if state.video_active {
             rl.DrawTexturePro(surface, src, dst, rl.Vector2(0), 0, rl.WHITE)
         }
+
+        render_ui(state, dst)
 
         rl.EndDrawing()
     }
@@ -132,6 +159,7 @@ main :: proc() {
     rl.SetTraceLogLevel(.WARNING)
     rl.InitWindow(DEFAULT_WINDOW_HEIGHT * width / height, DEFAULT_WINDOW_HEIGHT, state.filename)
     rl.InitAudioDevice()
+    rl.SetWindowMinSize(MIN_WINDOW_HEIGHT * width / height, MIN_WINDOW_HEIGHT)
     rl.SetTargetFPS(120)
 
     img := rl.Image {
