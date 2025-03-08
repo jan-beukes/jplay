@@ -1,2 +1,5 @@
 jplay
 vendor/*
+misc/
+*.webm
+*.mp4

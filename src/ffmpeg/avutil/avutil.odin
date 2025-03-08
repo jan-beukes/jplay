@@ -219,8 +219,7 @@ foreign avutil {
 
     // Allocates a Blowfish context.
     blowfish_alloc :: proc() -> ^types.Blowfish ---
-
-    // Initializes a Blowfish context.
+    // Initializes a Blowfish contextmag.
     blowfish_init :: proc(ctx: ^types.Blowfish, key: [^]u8, key_len: i32) ---
 
     // Encrypts or decrypts a buffer using a previously initialized context.
