@@ -818,22 +818,22 @@ foreign avutil {
 
     //===imgutils.h===
     // Computes the max pixel step for each plane of an image with a given format.
-    image_fill_max_pixsteps :: proc(max_pixsteps: [4]i32, max_pixstep_comps: [4]i32, pixdesc: ^types.Pix_Fmt_Descriptor) ---
+    image_fill_max_pixsteps :: proc(max_pixsteps: [^]i32, max_pixstep_comps: [^]i32, pixdesc: ^types.Pix_Fmt_Descriptor) ---
 
     // Computes the size of an image line with a given format and width for a specific plane.
     image_get_linesize :: proc(pix_fmt: types.Pixel_Format, width: i32, plane: i32) -> i32 ---
 
     // Fills plane linesizes for an image with a given pixel format and width.
-    image_fill_linesizes :: proc(linesizes: [4]i32, pix_fmt: types.Pixel_Format, width: i32) -> i32 ---
+    image_fill_linesizes :: proc(linesizes: [^]i32, pix_fmt: types.Pixel_Format, width: i32) -> i32 ---
 
     // Fills plane sizes for an image with a given pixel format and height.
-    image_fill_plane_sizes :: proc(size: [4]uintptr, pix_fmt: types.Pixel_Format, height: i32, linesizes: ^ptrdiff_t) -> i32 ---
+    image_fill_plane_sizes :: proc(size: [^]uintptr, pix_fmt: types.Pixel_Format, height: i32, linesizes: ^ptrdiff_t) -> i32 ---
 
     // Fills plane data pointers for an image with a given pixel format and height.
-    image_fill_pointers :: proc(data: [4][^]u8, pix_fmt: types.Pixel_Format, height: i32, ptr: [^]u8, linesizes: [4]i32) -> i32 ---
+    image_fill_pointers :: proc(data: [^][^]u8, pix_fmt: types.Pixel_Format, height: i32, ptr: [^]u8, linesizes: [^]i32) -> i32 ---
 
     // Allocates an image with a given size and pixel format, and fills pointers and linesizes accordingly.
-    image_alloc :: proc(pointers: [4][^]u8, linesizes: [4]i32, w: i32, h: i32, pix_fmt: types.Pixel_Format, align: i32) -> i32 ---
+    image_alloc :: proc(pointers: [^][^]u8, linesizes: [^]i32, w: i32, h: i32, pix_fmt: types.Pixel_Format, align: i32) -> i32 ---
 
     // Copies image plane from src to dst. That is, copies "height" number of lines of "bytewidth" bytes each.
     image_copy_plane :: proc(dst: [^]u8, dst_linesize: i32, src: [^]u8, src_linesize: i32, bytewidth: i32, height: i32) ---
@@ -842,22 +842,22 @@ foreign avutil {
     image_copy_plane_uc_from :: proc(dst: [^]u8, dst_linesize: ptrdiff_t, src: [^]u8, src_linesize: ptrdiff_t, bytewidth: ptrdiff_t, height: i32) ---
 
     // Copies image in src_data to dst_data.
-    image_copy :: proc(dst_data: [4][^]u8, dst_linesizes: [4]i32, src_data: [4][^]u8, src_linesizes: [4]i32, pix_fmt: types.Pixel_Format, width: i32, height: i32) ---
+    image_copy :: proc(dst_data: [^][^]u8, dst_linesizes: [^]i32, src_data: [^][^]u8, src_linesizes: [^]i32, pix_fmt: types.Pixel_Format, width: i32, height: i32) ---
     // WARNING: dst_data, dst_linesizes, src_data, and src_linesizes might be arrays
 
     // Copies image data located in uncacheable (e.g. GPU mapped) memory.
-    image_copy_uc_from :: proc(dst_data: [4][^]u8, dst_linesizes: [4]ptrdiff_t, src_data: [4][^]u8, src_linesizes: [4]ptrdiff_t, pix_fmt: types.Pixel_Format, width: i32, height: i32) ---
+    image_copy_uc_from :: proc(dst_data: [^][^]u8, dst_linesizes: [^]ptrdiff_t, src_data: [^][^]u8, src_linesizes: [^]ptrdiff_t, pix_fmt: types.Pixel_Format, width: i32, height: i32) ---
     // WARNING: dst_data, dst_linesizes, src_data, and src_linesizes might be arrays
 
     // Sets up the data pointers and linesizes based on the specified image parameters and the provided array.
-    image_fill_arrays :: proc(dst_data: [4][^]u8, dst_linesize: [4]i32, src: [^]u8, pix_fmt: types.Pixel_Format, width: i32, height: i32, align: i32) -> i32 ---
+    image_fill_arrays :: proc(dst_data: [^][^]u8, dst_linesize: [^]i32, src: [^]u8, pix_fmt: types.Pixel_Format, width: i32, height: i32, align: i32) -> i32 ---
     // WARNING: dst_data and dst_linesize might be arrays
 
     // Returns the size in bytes of the amount of data required to store an image with the given parameters.
     image_get_buffer_size :: proc(pix_fmt: types.Pixel_Format, width: i32, height: i32, align: i32) -> i32 ---
 
     // Copies image data from an image into a buffer.
-    image_copy_to_buffer :: proc(dst: [^]u8, dst_size: i32, src_data: [4][^]u8, src_linesize: [4]i32, pix_fmt: types.Pixel_Format, width: i32, height: i32, align: i32) -> i32 ---
+    image_copy_to_buffer :: proc(dst: [^]u8, dst_size: i32, src_data: [^][^]u8, src_linesize: [^]i32, pix_fmt: types.Pixel_Format, width: i32, height: i32, align: i32) -> i32 ---
     // WARNING: src_data and src_linesize might be arrays
 
     // Checks if the given dimension of an image is valid.
@@ -870,7 +870,7 @@ foreign avutil {
     image_check_sar :: proc(w: u32, h: u32, sar: types.Rational) -> i32 ---
 
     // Overwrites the image data with black.
-    image_fill_black :: proc(dst_data: [4][^]u8, dst_linesize: [4]ptrdiff_t, pix_fmt: types.Pixel_Format, range: types.Color_Range, width: i32, height: i32) -> i32 ---
+    image_fill_black :: proc(dst_data: [^][^]u8, dst_linesize: [^]ptrdiff_t, pix_fmt: types.Pixel_Format, range: types.Color_Range, width: i32, height: i32) -> i32 ---
     // WARNING: dst_data and dst_linesize might be arrays
 
 
@@ -1267,12 +1267,12 @@ foreign avutil {
     get_pix_fmt_string :: proc(buf: cstring, buf_size: i32, pix_fmt: types.Pixel_Format) -> cstring ---
 
     // Reads a line from an image, and writes the values of the pixel format component c to dst
-    read_image_line2 :: proc(dst: rawptr, data: [4][^]u8, linesize: [4]i32, desc: ^types.Pix_Fmt_Descriptor, x: i32, y: i32, c: i32, w: i32, read_pal_component: i32, dst_element_size: i32) ---
-    read_image_line :: proc(dst: [^]u16, data: [4][^]u8, linesize: [4]i32, desc: ^types.Pix_Fmt_Descriptor, x: i32, y: i32, c: i32, w: i32, read_pal_component: i32) ---
+    read_image_line2 :: proc(dst: rawptr, data: [^][^]u8, linesize: [^]i32, desc: ^types.Pix_Fmt_Descriptor, x: i32, y: i32, c: i32, w: i32, read_pal_component: i32, dst_element_size: i32) ---
+    read_image_line :: proc(dst: [^]u16, data: [^][^]u8, linesize: [^]i32, desc: ^types.Pix_Fmt_Descriptor, x: i32, y: i32, c: i32, w: i32, read_pal_component: i32) ---
 
     // Writes the values from src to the pixel format component c of an image line
-    write_image_line2 :: proc(src: rawptr, data: [4][^]u8, linesize: [4]i32, desc: ^types.Pix_Fmt_Descriptor, x: i32, y: i32, c: i32, w: i32, src_element_size: i32) ---
-    write_image_line :: proc(src: [^]u16, data: [4][^]u8, linesize: [4]i32, desc: ^types.Pix_Fmt_Descriptor, x: i32, y: i32, c: i32, w: i32) ---
+    write_image_line2 :: proc(src: rawptr, data: [^][^]u8, linesize: [^]i32, desc: ^types.Pix_Fmt_Descriptor, x: i32, y: i32, c: i32, w: i32, src_element_size: i32) ---
+    write_image_line :: proc(src: [^]u16, data: [^][^]u8, linesize: [^]i32, desc: ^types.Pix_Fmt_Descriptor, x: i32, y: i32, c: i32, w: i32) ---
 
     // Utility function to swap the endianness of a pixel format
     pix_fmt_swap_endianness :: proc(pix_fmt: types.Pixel_Format) -> types.Pixel_Format ---
@@ -2154,4 +2154,3 @@ foreign avutil {
 	avpriv_tempfile
 	avpriv_vga16_font
 */
-

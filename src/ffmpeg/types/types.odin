@@ -6,7 +6,7 @@
 
 	Libraries copyright their respective owner, available under their own licenses.
 */
-package ffmpeg_types
+package types
 
 import "base:runtime"
 import "core:c"

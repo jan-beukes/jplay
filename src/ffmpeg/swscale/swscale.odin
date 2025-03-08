@@ -155,4 +155,3 @@ foreign swscale {
 	sws_shiftVec
 	sws_subVec
 */
-

@@ -1,7 +1,7 @@
-package ffmpeg_avutil
+package avutil
 
+import "../types"
 import "core:fmt"
-import "ffmpeg:types"
 
 
 q2d :: proc(r: types.Rational) -> f64 {
@@ -92,4 +92,3 @@ av_error :: proc(err_code: i32) -> types.AVError {
     assert(err_enum != nil, fmt.aprintf("Unrecognized Error Code: %d", err_code))
     return err_enum
 }
-
