@@ -8,8 +8,9 @@ q2d :: proc(r: types.Rational) -> f64 {
     return cast(f64)r.numerator / cast(f64)r.denominator
 }
 
+// The endianess makes this transmute not work so we need to force big endian
 errbytes_to_int :: proc(bytes: [4]byte) -> i32 {
-    return -transmute(i32)[4]byte{bytes[3], bytes[2], bytes[1], bytes[0]}
+    return -cast(i32)transmute(i32be)[4]u8{bytes[3], bytes[2], bytes[1], bytes[0]}
 }
 av_error :: proc(err_code: i32) -> types.AVError {
     /*
@@ -89,6 +90,6 @@ av_error :: proc(err_code: i32) -> types.AVError {
         err_enum = types.AVError.EINVAL
     }
     //this shouldn't be an assert, we may want to pass through underlying codec errors.
-    assert(err_enum != nil, fmt.aprintf("Unrecognized Error Code: %d", err_code))
+    //assert(err_enum != nil, fmt.aprintf("Unrecognized Error Code: %d", err_code))
     return err_enum
 }

@@ -43,6 +43,8 @@ foreign swresample {
     // Checks whether an swr context has been initialized or not
     is_initialized :: proc(s: ^types.Software_Resample_Context) -> i32 ---
 
+    alloc_set_opts :: proc(s: ^types.Software_Resample_Context, out_ch_layout: ^types.Channel_Layout, out_sample_fmt: types.Sample_Format, out_sample_rate: i32, in_ch_layout: ^types.Channel_Layout, in_sample_fmt: types.Sample_Format, in_sample_rate: i32, log_offset: i32, log_ctx: rawptr) -> ^types.Software_Resample_Context ---
+
     // Allocates Software_Resample_Context if needed and sets/resets common parameters
     alloc_set_opts2 :: proc(s: ^^types.Software_Resample_Context, out_ch_layout: ^types.Channel_Layout, out_sample_fmt: types.Sample_Format, out_sample_rate: i32, in_ch_layout: ^types.Channel_Layout, in_sample_fmt: types.Sample_Format, in_sample_rate: i32, log_offset: i32, log_ctx: rawptr) -> i32 ---
 

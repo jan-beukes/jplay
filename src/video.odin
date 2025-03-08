@@ -2,7 +2,9 @@ package main
 
 import "core:fmt"
 import "core:log"
+import "core:mem"
 import os "core:os/os2"
+import "core:slice"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -164,7 +166,7 @@ decode_thread_func :: proc(state: ^Video_State) {
 
         // for split streaming
         if state.is_split {
-            if !queue_empty(&state.packets2) && !queue_full(&state.packets2) {
+            if !queue_empty(&state.packets2) && !queue_full(a_frames) {
                 packet := dequeue(&state.packets2)
                 decode(packet, &state.a_decoder)
             }
@@ -185,12 +187,12 @@ video_update :: proc(state: ^Video_State, surface: rl.Texture) {
         return
     }
 
-    log.info(
-        queue_size(&state.packets),
-        queue_size(&state.packets2),
-        queue_size(v_frames),
-        queue_size(a_frames),
-    )
+    //log.info(
+    //    queue_size(&state.packets),
+    //    queue_size(&state.packets2),
+    //    queue_size(v_frames),
+    //    queue_size(a_frames),
+    //)
 
     // Audio
     if !queue_empty(a_frames) && rl.IsAudioStreamProcessed(state.audio_stream) {
@@ -200,7 +202,7 @@ video_update :: proc(state: ^Video_State, surface: rl.Texture) {
         ptr := raw_data(state.audio_buffer)
         swresample.convert(
             state.swr_ctx,
-            raw_data([][^]u8{ptr}), // Sus
+            &ptr,
             i32(len(state.audio_buffer)),
             raw_data(frame.data[:]),
             frame.nb_samples,
@@ -235,15 +237,72 @@ video_update :: proc(state: ^Video_State, surface: rl.Texture) {
 
 }
 
+// use yt-dlp to get the urls of video/*audio stream and open the format
+DEFAULT_ARGS :: []string{"-f", "b*[height<=1080]+ba"}
 get_yt_format :: proc(
     video_file: string,
     yt_args: []string,
+    is_split: ^bool,
 ) -> (
     ^Format_Context,
     ^Format_Context,
 ) {
+    log.info("Fetching youtube stream")
+    args := yt_args == nil ? DEFAULT_ARGS : yt_args
 
-    return nil, nil
+    // need to keep space for yt-dlp, --get-url and video_file in the cmd
+    cmd := make([]string, len(args) + 3, context.temp_allocator)
+    defer delete(cmd)
+    size := len(cmd)
+    cmd[0] = "yt-dlp"
+    copy_slice(cmd[1:], args)
+    cmd[size - 2] = "--get-url"
+    cmd[size - 1] = video_file
+
+    desc := os.Process_Desc {
+        command = cmd,
+    }
+
+    state, stdout, stderr, err := os.process_exec(desc, context.temp_allocator)
+
+    if err != nil {
+        log.error("Could not run yt-dlp:", os.error_string(err))
+        os.exit(1)
+    } else if state.exit_code != 0 {
+        fmt.eprintln(string(stderr))
+    }
+
+    files := strings.split_lines(string(stdout), context.temp_allocator)
+    is_split^ = len(files) > 1
+
+    video := strings.clone_to_cstring(files[0], context.temp_allocator)
+
+    format_ctx, format_ctx2: ^Format_Context
+    format_ctx = avformat.alloc_context()
+    if avformat.open_input(&format_ctx, video, nil, nil) != 0 {
+        log.error("Could not open video file", video)
+        os.exit(1)
+    }
+    if avformat.find_stream_info(format_ctx, nil) < 0 {
+        log.error("Could not find stream info")
+        os.exit(1)
+    }
+    if is_split^ {
+        audio := strings.clone_to_cstring(files[1], context.temp_allocator)
+        format_ctx2 = avformat.alloc_context()
+        if avformat.open_input(&format_ctx2, audio, nil, nil) != 0 {
+            log.error("Could not open audio file", audio)
+            os.exit(1)
+        }
+        if avformat.find_stream_info(format_ctx2, nil) < 0 {
+            log.error("Could not find audio stream info")
+            os.exit(1)
+        }
+    } else {
+        format_ctx2 = format_ctx
+    }
+    free_all(context.temp_allocator)
+    return format_ctx, format_ctx2
 }
 
 decoder_init :: proc(decoder: ^Decoder, format_ctx: ^Format_Context, media_type: Media_Type) {
@@ -348,20 +407,26 @@ video_conversion_init :: proc(state: ^Video_State) {
         log.error("Could not alloc swresample")
         os.exit(1)
     }
-    if swresample.init(state.swr_ctx) < 0 {
+    if swresample.init(state.swr_ctx) != 0 {
         log.error("Could not init swresample")
         os.exit(1)
     }
 }
 
+YT_DOMAINS :: []string{"https://www.youtu", "https://youtu", "youtu"}
 video_state_init :: proc(state: ^Video_State, video_file: string, yt_args: []string) {
-
     avutil.log_set_level(.ERROR)
     state.filename = strings.clone_to_cstring(video_file)
     format_ctx, format_ctx2: ^Format_Context
+    // check for youtube domain
     is_url := false
+    for domain in YT_DOMAINS {
+        if strings.starts_with(video_file, domain) {
+            is_url = true
+        }
+    }
     if is_url {
-        format_ctx, format_ctx2 = get_yt_format(video_file, yt_args)
+        format_ctx, format_ctx2 = get_yt_format(video_file, yt_args, &state.is_split)
     } else {
         state.is_split = false
         log.info("Loading Video")
@@ -431,18 +496,19 @@ SAMPLE_SIZE :: 32
 audio_init :: proc(state: ^Video_State) {
     // Because of buffer filling issues when frame size is unknown
     // we scan the frames for a good value
-    buffer_size := state.a_decoder.ctx.frame_size
+    sample_count := state.a_decoder.ctx.frame_size
     a_frames := &state.a_decoder.frames
-    if buffer_size == 0 {
+    if sample_count == 0 {
+        // make sure we have some frames
         for queue_size(a_frames) < 10 {}
         for i := a_frames.rindex; i < a_frames.windex; i += 1 {
             frame := a_frames.items[i]
-            buffer_size = max(buffer_size, frame.nb_samples)
+            sample_count = max(sample_count, frame.nb_samples)
         }
     }
-    assert(buffer_size != 0)
+    assert(sample_count != 0)
 
-    rl.SetAudioStreamBufferSizeDefault(buffer_size)
+    rl.SetAudioStreamBufferSizeDefault(sample_count)
     ctx := state.a_decoder.ctx
     state.audio_stream = rl.LoadAudioStream(
         u32(ctx.sample_rate),
@@ -450,5 +516,7 @@ audio_init :: proc(state: ^Video_State) {
         u32(ctx.ch_layout.nb_channels),
     )
 
+    // DDUDUUDUDUDE
+    buffer_size := sample_count * ctx.ch_layout.nb_channels * SAMPLE_SIZE
     state.audio_buffer = make([]u8, buffer_size)
 }
