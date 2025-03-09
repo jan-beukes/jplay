@@ -1,5 +1,6 @@
 package main
 
+import "core:c/libc"
 import "core:fmt"
 import "core:log"
 import "core:mem"
@@ -10,8 +11,8 @@ import rl "vendor:raylib"
 
 DEFAULT_WINDOW_HEIGHT :: 600
 MIN_WINDOW_HEIGHT :: 200
-VOLUME_STEP :: 0.1
-MAX_VOLUME :: 5.0
+VOLUME_STEP: f32 : 0.05
+MAX_VOLUME: f32 : 5.0
 
 // Video Player state
 volume: f32 = 1.0
@@ -35,10 +36,90 @@ Options:
     )
 }
 
+get_time_cstring :: proc(buf: []u8, seconds: int) -> cstring {
+    if (seconds < 60 * 60) {
+        s := seconds % 60
+        m := seconds / 60
+        libc.snprintf(raw_data(buf), len(buf), "%02d:%02d", m, s)
+        return cstring(raw_data(buf))
+    } else {
+        s := seconds % 60
+        m := seconds / 60
+        h := seconds / (60 * 60) % 60
+        libc.snprintf(raw_data(buf), len(buf), "%02d:%02d:%02d", h, m, s)
+        return cstring(raw_data(buf))
+    }
+}
+
 // ui
-PAUSE_SCALE :: 0.1
+// scales based screen render rect
+PAUSE_SCALE: f32 : 0.1
+TIME_FONT_SCALE: f32 : 0.03
+VOLUME_BAR_SCALE: f32 : 0.1
+
+ROUNDNESS :: 0.4
+CURVE_RES :: 20
 
 render_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
+
+    screen_width, screen_height := rl.GetScreenWidth(), rl.GetScreenHeight()
+
+    font_size := rect.height * TIME_FONT_SCALE
+    faded_black := rl.Color{0, 0, 0, 100}
+
+    //---Time---
+    padding := font_size * 0.2
+    current_time := int(state.audio_clock) / int(state.audio_stream.sampleRate)
+    current_buf, duration_buf: [128]u8
+    time_str := get_time_cstring(current_buf[:], current_time)
+    duration_str := get_time_cstring(duration_buf[:], int(state.duration))
+    text := rl.TextFormat("%s/%s", time_str, duration_str)
+    text_width := f32(rl.MeasureText(text, i32(font_size)))
+
+    bottom := rect.y + rect.height
+    right := rect.x + rect.width
+    time_rect := rl.Rectangle {
+        x      = right - text_width - 2 * padding,
+        y      = bottom - font_size - padding,
+        width  = text_width + 2 * padding,
+        height = font_size + 2 * padding,
+    }
+    rl.DrawRectangleRounded(time_rect, ROUNDNESS, CURVE_RES, faded_black)
+    rl.DrawText(
+        text,
+        i32(right - text_width - padding),
+        i32(bottom - font_size),
+        i32(font_size),
+        rl.RAYWHITE,
+    )
+
+    // Volume
+    max_width := rect.width * VOLUME_BAR_SCALE
+    volume_bar := rl.Rectangle{rect.x, bottom - font_size, max_width, font_size}
+    rl.DrawRectangleRounded(volume_bar, ROUNDNESS, CURVE_RES, faded_black)
+    volume_bar = rl.Rectangle {
+        x      = rect.x + padding,
+        y      = bottom - font_size + padding,
+        width  = (volume / MAX_VOLUME) * max_width - 2.0 * padding,
+        height = font_size - 2.0 * padding,
+    }
+    color := muted ? rl.GRAY : rl.RAYWHITE
+    rl.DrawRectangleRounded(volume_bar, ROUNDNESS, CURVE_RES, color)
+
+    // Pause
+    if paused {
+        pause_height := i32(rect.height * PAUSE_SCALE)
+        pause_width := i32(f32(pause_height) * 0.25)
+        y := (screen_height - pause_height) / 2
+        x := screen_width / 2 - 2 * pause_width
+        rl.DrawRectangle(x, y, pause_width, pause_height, rl.RAYWHITE)
+        rl.DrawRectangleLines(x, y, pause_width, pause_height, rl.BLACK)
+        x += 2 * pause_width
+        rl.DrawRectangle(x, y, pause_width, pause_height, rl.RAYWHITE)
+        rl.DrawRectangleLines(x, y, pause_width, pause_height, rl.BLACK)
+    }
+
+
     // buffering :)
     if buffering {
         size := rect.height * PAUSE_SCALE
@@ -55,7 +136,7 @@ main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
     rl.PlayAudioStream(state.audio_stream)
     for !rl.WindowShouldClose() {
 
-        if state.video_active && !buffering {
+        if state.video_active && !paused && !buffering {
             video_update(state, surface)
         }
 
@@ -67,6 +148,10 @@ main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
         }
 
         //---Events---
+        if rl.IsKeyPressed(.SPACE) {
+            paused = !paused
+        }
+        // maximize
         if rl.IsKeyPressed(.F) {
             if rl.IsWindowMaximized() {
                 rl.RestoreWindow()
@@ -74,12 +159,20 @@ main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
                 rl.MaximizeWindow()
             }
         }
-        if rl.IsKeyPressed(.UP) {
-            volume = min(volume + VOLUME_STEP, MAX_VOLUME)
-            rl.SetAudioStreamVolume(state.audio_stream, volume)
-        } else if rl.IsKeyPressed(.DOWN) {
-            volume = max(volume - VOLUME_STEP, 0)
-            rl.SetAudioStreamVolume(state.audio_stream, volume)
+        // Volume
+        scroll := rl.GetMouseWheelMoveV().y
+        if rl.IsKeyPressed(.UP) || scroll > 0.0 {
+            if !muted {
+                step := scroll != 0.0 ? VOLUME_STEP : VOLUME_STEP * 4.0
+                volume = min(volume + step, MAX_VOLUME)
+                rl.SetAudioStreamVolume(state.audio_stream, volume)
+            }
+        } else if rl.IsKeyPressed(.DOWN) || scroll < 0.0 {
+            if !muted {
+                step := scroll != 0.0 ? VOLUME_STEP : VOLUME_STEP * 4.0
+                volume = max(volume - step, 0)
+                rl.SetAudioStreamVolume(state.audio_stream, volume)
+            }
         }
 
         //---Drawing---
