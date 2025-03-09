@@ -134,7 +134,6 @@ decode :: proc(packet: ^Packet, decoder: ^Decoder) -> bool {
 
 // The decoder thread
 decode_thread_func :: proc(state: ^Video_State) {
-
     v_frames := &state.v_decoder.frames
     a_frames := &state.a_decoder.frames
     for state.v_decoder.active && state.a_decoder.active {
@@ -159,17 +158,30 @@ decode_thread_func :: proc(state: ^Video_State) {
             // No more packets
             state.v_decoder.active = false
             state.a_decoder.active = false
-            log.info("Decoding Done!")
         }
 
+    }
+}
+
+// for split video
+decode_thread_func2 :: proc(state: ^Video_State) {
+    a_frames := &state.a_decoder.frames
+    for state.v_decoder.active && state.a_decoder.active {
+        if rl.IsWindowReady() && rl.WindowShouldClose() do break
+
         // for split streaming
-        if state.is_split {
-            if !queue_empty(&state.packets2) && !queue_full(a_frames) {
+        if !queue_empty(&state.packets2) {
+            if !queue_full(a_frames) {
                 packet := dequeue(&state.packets2)
                 decode(packet, &state.a_decoder)
             }
+        } else if !state.io_active {
+            // No more packets
+            state.v_decoder.active = false
+            state.a_decoder.active = false
         }
     }
+
 }
 
 // update the audio stream and surface with new video data
@@ -233,6 +245,28 @@ video_update :: proc(state: ^Video_State, surface: rl.Texture) {
         sync.mutex_unlock(&v_frames.mutex)
     }
 
+}
+
+// seek to time stamp in the *video stream* pts units
+video_seek :: proc(state: ^Video_State, ts: i64) {
+    state.video_clock = ts
+    seconds := f64(ts) * avutil.q2d(state.v_decoder.ctx.time_base)
+    state.audio_clock = i64(state.audio_stream.sampleRate) * i64(seconds)
+    flags: types.Format_Seek_Flags = ts < state.video_clock ? {.Backward} : {}
+    avformat.seek_frame(state.v_decoder.format_ctx, state.v_decoder.index, ts, flags)
+    if state.is_split {
+        ts2 := avutil.rescale_q(ts, state.v_decoder.ctx.time_base, state.a_decoder.ctx.time_base)
+        avformat.seek_frame(state.a_decoder.format_ctx, state.a_decoder.index, ts, flags)
+    }
+
+    // flush buffers
+    if !queue_empty(&state.packets) do queue_flush(&state.packets)
+    if state.is_split && !queue_empty(&state.packets) do queue_flush(&state.packets2)
+    if !queue_empty(&state.v_decoder.frames) do queue_flush(&state.v_decoder.frames)
+    if !queue_empty(&state.a_decoder.frames) do queue_flush(&state.a_decoder.frames)
+
+    avcodec.flush_buffers(state.v_decoder.ctx)
+    avcodec.flush_buffers(state.a_decoder.ctx)
 }
 
 // use yt-dlp to get the urls of video/*audio stream and open the format
@@ -412,6 +446,19 @@ video_conversion_init :: proc(state: ^Video_State) {
     }
 }
 
+spawn_threads :: proc(state: ^Video_State) {
+    state.io_active = true
+    state.v_decoder.active = true
+    state.a_decoder.active = true
+    thread.run_with_poly_data(state, io_thread_func, context)
+    thread.run_with_poly_data(state, decode_thread_func, context)
+    // extra thread for split video
+    if state.is_split {
+        thread.run_with_poly_data(state, decode_thread_func2, context)
+    }
+    state.video_active = true
+}
+
 YT_DOMAINS :: []string{"https://www.youtu", "https://youtu", "youtu"}
 video_state_init :: proc(state: ^Video_State, video_file: string, yt_args: []string) {
     avutil.log_set_level(.QUIET)
@@ -459,14 +506,7 @@ video_state_init :: proc(state: ^Video_State, video_file: string, yt_args: []str
     state.duration = f64(state.v_decoder.format_ctx.duration) / f64(types.TIME_BASE)
 
     video_conversion_init(state)
-
-    // Begin threads
-    state.io_active = true
-    state.v_decoder.active = true
-    state.a_decoder.active = true
-    thread.run_with_poly_data(state, io_thread_func, context)
-    thread.run_with_poly_data(state, decode_thread_func, context)
-    state.video_active = true
+    spawn_threads(state)
 }
 
 video_state_deinit :: proc(state: ^Video_State) {
@@ -502,6 +542,7 @@ audio_init :: proc(state: ^Video_State) {
     a_frames := &state.a_decoder.frames
     if sample_count == 0 {
         // make sure we have some frames
+        for queue_size(a_frames) < 5 {}
         for i := a_frames.rindex; i < a_frames.windex; i += 1 {
             frame := a_frames.items[i]
             sample_count = max(sample_count, frame.nb_samples)

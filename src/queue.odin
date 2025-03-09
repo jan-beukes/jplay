@@ -44,6 +44,19 @@ queue_deinit :: proc(q: ^Queue($T), alloc := context.allocator) {
     delete(q.items)
 }
 
+queue_flush :: proc(q: ^Queue($T)) {
+    sync.mutex_lock(&q.mutex)
+    for q.windex != q.rindex {
+        item := dequeue_no_lock(q)
+        when T == ^Frame {
+            avutil.frame_unref(item)
+        } else when T == ^Packet {
+            avcodec.packet_unref(item)
+        }
+    }
+    sync.mutex_unlock(&q.mutex)
+}
+
 queue_size :: proc(q: ^Queue($T)) -> int {
     if q.windex >= q.rindex {
         return q.windex - q.rindex

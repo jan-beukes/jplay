@@ -50,7 +50,7 @@ get_time_cstring :: proc(buf: []u8, seconds: int) -> cstring {
         return cstring(raw_data(buf))
     } else {
         s := seconds % 60
-        m := seconds / 60
+        m := (seconds / 60) % 60
         h := seconds / (60 * 60) % 60
         libc.snprintf(raw_data(buf), len(buf), "%02d:%02d:%02d", h, m, s)
         return cstring(raw_data(buf))
@@ -121,7 +121,7 @@ handle_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
         mouse_focus = .NONE
     }
 
-    // Render
+    // Render Volume
     inner_max_width := (max_width - 2 * padding)
     rl.DrawRectangleRounded(volume_bar, ROUNDNESS, CURVE_RES, faded_black)
     volume_bar = rl.Rectangle {
@@ -141,15 +141,21 @@ handle_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
 
     // Pause
     if paused {
-        pause_height := i32(rect.height * PAUSE_SCALE)
-        pause_width := i32(f32(pause_height) * 0.25)
-        y := (screen_height - pause_height) / 2
-        x := screen_width / 2 - 2 * pause_width
-        rl.DrawRectangle(x, y, pause_width, pause_height, rl.RAYWHITE)
-        rl.DrawRectangleLines(x, y, pause_width, pause_height, rl.BLACK)
-        x += 2 * pause_width
-        rl.DrawRectangle(x, y, pause_width, pause_height, rl.RAYWHITE)
-        rl.DrawRectangleLines(x, y, pause_width, pause_height, rl.BLACK)
+        pause_height := rect.height * PAUSE_SCALE
+        pause_width := pause_height * 0.25
+        shadow_offset := pause_width * 0.15
+        y := (f32(screen_height) - pause_height) / 2.0
+        x := f32(screen_width) / 2.0 - 2.0 * pause_width
+        pause_rect := rl.Rectangle{x, y, pause_width, pause_height}
+        shadow_rect := pause_rect
+        shadow_rect.x += shadow_offset
+        shadow_rect.y += shadow_offset
+        rl.DrawRectangleRounded(shadow_rect, ROUNDNESS, CURVE_RES, faded_black)
+        rl.DrawRectangleRounded(pause_rect, ROUNDNESS, CURVE_RES, rl.RAYWHITE)
+        pause_rect.x += 2 * pause_width
+        shadow_rect.x = pause_rect.x + shadow_offset
+        rl.DrawRectangleRounded(shadow_rect, ROUNDNESS, CURVE_RES, faded_black)
+        rl.DrawRectangleRounded(pause_rect, ROUNDNESS, CURVE_RES, rl.RAYWHITE)
     }
 
     // buffering :)
@@ -159,7 +165,21 @@ handle_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
         start_angle := f32((time - f64(int(time))) * 360)
         end_angle := f32(start_angle + 270)
         center := rl.Vector2{(rect.x + rect.width) / 2, (rect.y + rect.height) / 2}
-        rl.DrawRing(center, size, size - 0.1 * size, start_angle, end_angle, 20, rl.RED)
+        faded_red := rl.Fade(rl.RED, 0.8)
+        rl.DrawRing(center, size, size - 0.1 * size, start_angle, end_angle, CURVE_RES, faded_red)
+    }
+
+    // Video Done
+    if !state.video_active {
+        size := rect.height * PAUSE_SCALE * 0.5
+        start_angle: f32 = 180.0
+        end_angle: f32 = -90.0
+        center := rl.Vector2{(rect.x + rect.width) / 2, (rect.y + rect.height) / 2}
+        thick := 0.2 * size
+        rl.DrawRing(center, size, size - thick, start_angle, end_angle, CURVE_RES, rl.RAYWHITE)
+        triangle_width := size * 0.5
+        center.y -= size - 0.5 * thick
+        rl.DrawPoly(center, 3, triangle_width, 180, rl.RAYWHITE)
     }
 }
 
@@ -171,16 +191,28 @@ main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
             video_update(state, surface)
         }
 
-        // buffering for split youtube steams
-        if !buffering && state.is_split && queue_empty(&state.packets2) {
-            buffering = true
-        } else if buffering && queue_full(&state.packets2) {
-            buffering = false
+        if state.is_split && state.v_decoder.active && state.a_decoder.active {
+            // when video or audio frame queue is empty, buffer untill they are full
+            v_frames := &state.v_decoder.frames
+            a_frames := &state.a_decoder.frames
+            empty_frame_queue := queue_empty(a_frames) || queue_empty(v_frames)
+            full_frame_queue := queue_full(a_frames) && queue_full(v_frames)
+            if !buffering && empty_frame_queue {
+                buffering = true
+            } else if buffering && full_frame_queue {
+                buffering = false
+            }
         }
 
         //---Events---
         if rl.IsKeyPressed(.SPACE) || mouse_focus == .NONE && rl.IsMouseButtonPressed(.LEFT) {
-            paused = !paused
+            if state.video_active {
+                paused = !paused
+            } else {
+                // restart
+                video_seek(state, 0)
+                spawn_threads(state)
+            }
         }
         // maximize
         if rl.IsKeyPressed(.F) {
@@ -285,7 +317,7 @@ main :: proc() {
 
     // Init raylib
     width, height := state.v_decoder.ctx.width, state.v_decoder.ctx.height
-    rl.SetConfigFlags(rl.ConfigFlags{.WINDOW_RESIZABLE})
+    rl.SetConfigFlags(rl.ConfigFlags{.WINDOW_RESIZABLE, .MSAA_4X_HINT})
     rl.SetTraceLogLevel(.WARNING)
     rl.InitWindow(DEFAULT_WINDOW_HEIGHT * width / height, DEFAULT_WINDOW_HEIGHT, state.filename)
     rl.InitAudioDevice()
