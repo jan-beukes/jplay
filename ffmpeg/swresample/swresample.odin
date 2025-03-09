@@ -14,7 +14,7 @@ VENDOR :: #config(VENDOR_FFMPEG, false)
 
 when ODIN_OS == .Linux {
     when VENDOR {
-        foreign import swresample "../lib/swresample.so"
+        foreign import swresample "../lib/libswresample.so"
     } else {
         foreign import swresample "system:swresample"
     }

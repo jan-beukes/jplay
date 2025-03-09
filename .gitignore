@@ -1,5 +1,6 @@
 jplay
-vendor/*
+ffmpeg/lib
+ffmpeg/include
 misc/
 *.webm
 *.mp4

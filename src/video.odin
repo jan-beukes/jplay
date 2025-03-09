@@ -67,7 +67,6 @@ Video_State :: struct {
 
 // The io thread
 io_thread_func :: proc(state: ^Video_State) {
-    state.io_active = true
     done: bool
     ret: i32
 
@@ -134,8 +133,6 @@ decode :: proc(packet: ^Packet, decoder: ^Decoder) -> bool {
 
 // The decoder thread
 decode_thread_func :: proc(state: ^Video_State) {
-    state.v_decoder.active = true
-    state.a_decoder.active = true
 
     v_frames := &state.v_decoder.frames
     a_frames := &state.a_decoder.frames
@@ -407,8 +404,9 @@ video_conversion_init :: proc(state: ^Video_State) {
         log.error("Could not alloc swresample")
         os.exit(1)
     }
-    if swresample.init(state.swr_ctx) != 0 {
-        log.error("Could not init swresample")
+    ret = swresample.init(state.swr_ctx)
+    if ret != 0 {
+        log.error("Could not init swresample:", avutil.av_error(ret))
         os.exit(1)
     }
 }
@@ -461,9 +459,11 @@ video_state_init :: proc(state: ^Video_State, video_file: string, yt_args: []str
 
     video_conversion_init(state)
 
-    // spawn threads
+    // Begin threads
+    state.io_active = true
+    state.v_decoder.active = true
+    state.a_decoder.active = true
     thread.run_with_poly_data(state, io_thread_func, context)
-    // buffer packets
     thread.run_with_poly_data(state, decode_thread_func, context)
     state.video_active = true
 }

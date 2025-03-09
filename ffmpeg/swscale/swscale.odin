@@ -14,7 +14,7 @@ VENDOR :: #config(VENDOR_FFMPEG, false)
 
 when ODIN_OS == .Linux {
     when VENDOR {
-        foreign import swscale "../lib/swscale.so"
+        foreign import swscale "../lib/libswscale.so"
     } else {
         foreign import swscale "system:swscale"
     }

@@ -2,8 +2,8 @@ package main
 
 import "core:sync"
 
-import "ffmpeg/avcodec"
-import "ffmpeg/avutil"
+import "ffmpeg:avcodec"
+import "ffmpeg:avutil"
 
 PACKET_QUEUE_CAP :: 64
 FRAME_QUEUE_CAP :: 32
