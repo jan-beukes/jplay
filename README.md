@@ -12,11 +12,18 @@ odin bindings are a fixed version of [odin-ffmpeg-bindings](https://github.com/n
 ## Build
 **Dependencies**
 - raylib (odin vendor)
-- ffmpeg / libav
+- ffmpeg libs (version 6)
 - yt-dlp (optional for youtube streaming)
 
+To build with system ffmpeg
 ```
-odin build src -out:jplay
+./build.sh
+```
+To build with vendored ffmpeg
+```
+./install.sh
+./build.sh -define:VENDOR_FFMPEG=true
+export LD_LIBRARY_PATH=ffmpeg/lib
 ```
 
 ## Usage
