@@ -1,13 +1,11 @@
 # Jplay
-A simple video player
-
-capable of most formats supported by ffmpeg (so everything)
+A simple video player made with [raylib](https://www.raylib.com) and the [ffmpeg](https://ffmpeg.org/) libs
 
 can integrate with yt-dlp to stream video from youtube
 
 The original version can be found at https://github.com/jan-beukes/jplayer
 
-odin bindings are a fixed version of [odin-ffmpeg-bindings](https://github.com/numbers-zz/odin-ffmpeg-bindings)
+odin ffmpeg bindings are a fixed version of [odin-ffmpeg-bindings](https://github.com/numbers-zz/odin-ffmpeg-bindings)
 
 ## Build
 **Dependencies**
