@@ -10,7 +10,15 @@ package avutil
 
 import "../types"
 
-foreign import avutil "system:avutil"
+VENDOR :: #config(VENDOR_FFMPEG, false)
+
+when ODIN_OS == .Linux {
+    when VENDOR {
+        foreign import avutil "../lib/libavutil.so"
+    } else {
+        foreign import avutil "system:avutil"
+    }
+}
 
 //Figure this out later.
 ptrdiff_t :: distinct int

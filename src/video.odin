@@ -9,12 +9,12 @@ import "core:strings"
 import "core:sync"
 import "core:thread"
 
-import "ffmpeg/avcodec"
-import "ffmpeg/avformat"
-import "ffmpeg/avutil"
-import "ffmpeg/swresample"
-import "ffmpeg/swscale"
-import "ffmpeg/types"
+import "ffmpeg:avcodec"
+import "ffmpeg:avformat"
+import "ffmpeg:avutil"
+import "ffmpeg:swresample"
+import "ffmpeg:swscale"
+import "ffmpeg:types"
 import rl "vendor:raylib"
 
 Format_Context :: types.Format_Context
@@ -187,12 +187,12 @@ video_update :: proc(state: ^Video_State, surface: rl.Texture) {
         return
     }
 
-    log.info(
-        queue_size(&state.packets),
-        queue_size(&state.packets2),
-        queue_size(v_frames),
-        queue_size(a_frames),
-    )
+    //log.info(
+    //    queue_size(&state.packets),
+    //    queue_size(&state.packets2),
+    //    queue_size(v_frames),
+    //    queue_size(a_frames),
+    //)
 
     // Audio
     if !queue_empty(a_frames) && rl.IsAudioStreamProcessed(state.audio_stream) {

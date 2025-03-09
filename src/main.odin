@@ -6,9 +6,6 @@ import "core:mem"
 import os "core:os/os2"
 import "core:strings"
 
-import "ffmpeg/avcodec"
-import "ffmpeg/avformat"
-import "ffmpeg/types"
 import rl "vendor:raylib"
 
 DEFAULT_WINDOW_HEIGHT :: 600
@@ -42,8 +39,6 @@ Options:
 PAUSE_SCALE :: 0.1
 
 render_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
-
-
     // buffering :)
     if buffering {
         size := rect.height * PAUSE_SCALE
@@ -59,9 +54,11 @@ render_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
 main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
     rl.PlayAudioStream(state.audio_stream)
     for !rl.WindowShouldClose() {
+
         if state.video_active && !buffering {
             video_update(state, surface)
         }
+
         // buffering for split youtube steams
         if !buffering && state.is_split && queue_empty(&state.packets2) {
             buffering = true

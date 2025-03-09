@@ -11,7 +11,15 @@ package avcodec
 import "../types"
 import "core:c"
 
-foreign import avcodec "system:avcodec"
+VENDOR :: #config(VENDOR_FFMPEG, false)
+
+when ODIN_OS == .Linux {
+    when VENDOR {
+        foreign import avcodec "../lib/libavcodec.so"
+    } else {
+        foreign import avcodec "system:avcodec"
+    }
+}
 
 /*
 	Globals.
@@ -510,4 +518,3 @@ foreign avcodec {
 	avpriv_toupper4
 	avsubtitle_free
 */
-

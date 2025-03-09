@@ -10,7 +10,15 @@ package avformat
 
 import "../types"
 
-foreign import avformat "system:avformat"
+VENDOR :: #config(VENDOR_FFMPEG, false)
+
+when ODIN_OS == .Linux {
+    when VENDOR {
+        foreign import avformat "../lib/libavformat.so"
+    } else {
+        foreign import avformat "system:avformat"
+    }
+}
 
 /*
 	Globals.

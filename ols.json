@@ -1,0 +1,5 @@
+{
+	"collections": [
+		{ "name": "ffmpeg", "path": "./ffmpeg" }
+	],
+}

@@ -10,7 +10,15 @@ package swscale
 
 import "../types"
 
-foreign import swscale "system:swscale"
+VENDOR :: #config(VENDOR_FFMPEG, false)
+
+when ODIN_OS == .Linux {
+    when VENDOR {
+        foreign import swscale "../lib/swscale.so"
+    } else {
+        foreign import swscale "system:swscale"
+    }
+}
 
 /*
 	`swscale_*` functions.
