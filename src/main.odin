@@ -9,20 +9,26 @@ import "core:strings"
 
 import rl "vendor:raylib"
 
+Mouse_Focus :: enum {
+    NONE,
+    AUDIO,
+}
+
 DEFAULT_WINDOW_HEIGHT :: 600
 MIN_WINDOW_HEIGHT :: 200
-VOLUME_STEP: f32 : 0.05
-MAX_VOLUME: f32 : 5.0
+VOLUME_STEP: f32 : 0.1
+MAX_VOLUME: f32 : 3.0
 
 // Video Player state
 volume: f32 = 1.0
 muted := false
 buffering := false
 paused := false
+mouse_focus: Mouse_Focus = .NONE
+
 
 // flag
 quiet := false
-
 
 show_usage :: #force_inline proc() {
     fmt.eprintln(
@@ -60,7 +66,7 @@ VOLUME_BAR_SCALE: f32 : 0.1
 ROUNDNESS :: 0.4
 CURVE_RES :: 20
 
-render_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
+handle_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
 
     screen_width, screen_height := rl.GetScreenWidth(), rl.GetScreenHeight()
 
@@ -93,15 +99,42 @@ render_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
         rl.RAYWHITE,
     )
 
-    // Volume
-    max_width := rect.width * VOLUME_BAR_SCALE
+    //---Volume---
+    max_width := rect.width * VOLUME_BAR_SCALE + 2 * padding
     volume_bar := rl.Rectangle{rect.x, bottom - font_size, max_width, font_size}
+
+    mouse_pos := rl.GetMousePosition()
+    hover_volume: f32
+
+    // mouse select
+    if rl.CheckCollisionPointRec(mouse_pos, volume_bar) {
+        mouse_focus = .AUDIO
+        rl.SetMouseCursor(.POINTING_HAND)
+        hover_volume = MAX_VOLUME * (mouse_pos.x - volume_bar.x) / max_width
+        if rl.IsMouseButtonDown(.LEFT) {
+            volume = hover_volume
+            muted = false
+            rl.SetAudioStreamVolume(state.audio_stream, volume)
+        }
+    } else {
+        rl.SetMouseCursor(.DEFAULT)
+        mouse_focus = .NONE
+    }
+
+    // Render
+    inner_max_width := (max_width - 2 * padding)
     rl.DrawRectangleRounded(volume_bar, ROUNDNESS, CURVE_RES, faded_black)
     volume_bar = rl.Rectangle {
         x      = rect.x + padding,
         y      = bottom - font_size + padding,
-        width  = (volume / MAX_VOLUME) * max_width - 2.0 * padding,
+        width  = (volume / MAX_VOLUME) * inner_max_width,
         height = font_size - 2.0 * padding,
+    }
+    if mouse_focus == .AUDIO && !muted {
+        hover_bar := volume_bar
+        faded_gray := rl.Color{200, 200, 200, 50}
+        hover_bar.width = (hover_volume / MAX_VOLUME) * inner_max_width
+        rl.DrawRectangleRounded(hover_bar, ROUNDNESS, CURVE_RES, faded_gray)
     }
     color := muted ? rl.GRAY : rl.RAYWHITE
     rl.DrawRectangleRounded(volume_bar, ROUNDNESS, CURVE_RES, color)
@@ -119,11 +152,9 @@ render_ui :: proc(state: ^Video_State, rect: rl.Rectangle) {
         rl.DrawRectangleLines(x, y, pause_width, pause_height, rl.BLACK)
     }
 
-
     // buffering :)
     if buffering {
         size := rect.height * PAUSE_SCALE
-
         time := rl.GetTime()
         start_angle := f32((time - f64(int(time))) * 360)
         end_angle := f32(start_angle + 270)
@@ -148,7 +179,7 @@ main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
         }
 
         //---Events---
-        if rl.IsKeyPressed(.SPACE) {
+        if rl.IsKeyPressed(.SPACE) || mouse_focus == .NONE && rl.IsMouseButtonPressed(.LEFT) {
             paused = !paused
         }
         // maximize
@@ -163,16 +194,24 @@ main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
         scroll := rl.GetMouseWheelMoveV().y
         if rl.IsKeyPressed(.UP) || scroll > 0.0 {
             if !muted {
-                step := scroll != 0.0 ? VOLUME_STEP : VOLUME_STEP * 4.0
+                step := scroll != 0.0 ? VOLUME_STEP : VOLUME_STEP * 2.0
                 volume = min(volume + step, MAX_VOLUME)
                 rl.SetAudioStreamVolume(state.audio_stream, volume)
             }
         } else if rl.IsKeyPressed(.DOWN) || scroll < 0.0 {
             if !muted {
-                step := scroll != 0.0 ? VOLUME_STEP : VOLUME_STEP * 4.0
+                step := scroll != 0.0 ? VOLUME_STEP : VOLUME_STEP * 2.0
                 volume = max(volume - step, 0)
                 rl.SetAudioStreamVolume(state.audio_stream, volume)
             }
+        }
+        if rl.IsKeyPressed(.M) {
+            if muted {
+                rl.SetAudioStreamVolume(state.audio_stream, volume)
+            } else {
+                rl.SetAudioStreamVolume(state.audio_stream, 0.0)
+            }
+            muted = !muted
         }
 
         //---Drawing---
@@ -197,7 +236,7 @@ main_loop :: proc(state: ^Video_State, surface: rl.Texture) {
             rl.DrawTexturePro(surface, src, dst, rl.Vector2(0), 0, rl.WHITE)
         }
 
-        render_ui(state, dst)
+        handle_ui(state, dst)
 
         rl.EndDrawing()
     }
@@ -223,13 +262,14 @@ parse_args :: proc() -> (string, []string) {
             } else if strings.compare(arg, "-q") == 0 {
                 // quiet
                 quiet = true
+            } else if strings.compare(arg, "-m") == 0 {
+                muted = true
             } else {
                 show_usage()
                 os.exit(1)
             }
         }
     }
-
     video_file := args[len(args) - 1]
     return video_file, yt_args
 }
@@ -263,7 +303,11 @@ main :: proc() {
 
     // Audio
     audio_init(&state)
-    rl.SetAudioStreamVolume(state.audio_stream, volume)
+    if muted {
+        rl.SetAudioStreamVolume(state.audio_stream, 0.0)
+    } else {
+        rl.SetAudioStreamVolume(state.audio_stream, volume)
+    }
 
     main_loop(&state, surface)
 

@@ -106,6 +106,7 @@ io_thread_func :: proc(state: ^Video_State) {
 decode :: proc(packet: ^Packet, decoder: ^Decoder) -> bool {
     ret: i32
     ret = avcodec.send_packet(decoder.ctx, packet)
+    avcodec.packet_unref(packet)
     err := av_error(ret)
     if err == .EAGAIN {
         return false
