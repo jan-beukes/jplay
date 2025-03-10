@@ -259,14 +259,14 @@ video_seek :: proc(state: ^Video_State, ts: i64) {
         avformat.seek_frame(state.a_decoder.format_ctx, state.a_decoder.index, ts, flags)
     }
 
-    // flush buffers
-    if !queue_empty(&state.packets) do queue_flush(&state.packets)
-    if state.is_split && !queue_empty(&state.packets) do queue_flush(&state.packets2)
-    if !queue_empty(&state.v_decoder.frames) do queue_flush(&state.v_decoder.frames)
-    if !queue_empty(&state.a_decoder.frames) do queue_flush(&state.a_decoder.frames)
-
-    avcodec.flush_buffers(state.v_decoder.ctx)
-    avcodec.flush_buffers(state.a_decoder.ctx)
+    //// flush buffers
+    //if !queue_empty(&state.packets) do queue_flush(&state.packets)
+    //if state.is_split && !queue_empty(&state.packets) do queue_flush(&state.packets2)
+    //if !queue_empty(&state.v_decoder.frames) do queue_flush(&state.v_decoder.frames)
+    //if !queue_empty(&state.a_decoder.frames) do queue_flush(&state.a_decoder.frames)
+    //
+    //avcodec.flush_buffers(state.v_decoder.ctx)
+    //avcodec.flush_buffers(state.a_decoder.ctx)
 }
 
 // use yt-dlp to get the urls of video/*audio stream and open the format
@@ -510,24 +510,24 @@ video_state_init :: proc(state: ^Video_State, video_file: string, yt_args: []str
 }
 
 video_state_deinit :: proc(state: ^Video_State) {
-    // free queues
-    queue_deinit(&state.packets)
-    queue_deinit(&state.v_decoder.frames)
-    queue_deinit(&state.a_decoder.frames)
+    //// free queues
+    //queue_deinit(&state.packets)
+    //queue_deinit(&state.v_decoder.frames)
+    //queue_deinit(&state.a_decoder.frames)
 
-    avutil.frame_free(&state.out_frame)
-    avcodec.free_context(&state.v_decoder.ctx)
-    avcodec.free_context(&state.a_decoder.ctx)
-
+    //avutil.frame_free(&state.out_frame)
+    //avcodec.free_context(&state.v_decoder.ctx)
+    //avcodec.free_context(&state.a_decoder.ctx)
+    //
     avformat.free_context(state.v_decoder.format_ctx)
     if state.is_split {
-        queue_deinit(&state.packets2)
+        //queue_deinit(&state.packets2)
         avformat.free_context(state.a_decoder.format_ctx)
     }
 
-    swscale.freeContext(state.sws_ctx)
-    swresample.close(state.swr_ctx)
-    swresample.free(&state.swr_ctx)
+    //swscale.freeContext(state.sws_ctx)
+    //swresample.close(state.swr_ctx)
+    //swresample.free(&state.swr_ctx)
     if state.audio_buffer != nil {
         delete(state.audio_buffer)
         state.audio_buffer = nil
