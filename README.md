@@ -1,5 +1,9 @@
 # Jplay
 A simple video player made with [raylib](https://www.raylib.com) and the [ffmpeg](https://ffmpeg.org/) libs
+> [!Warning]
+> Currently struggles with playing 4k video from disk because both decoders read from the same packet queue
+> 
+> seeking is also not implemented
 
 can integrate with yt-dlp to stream video from youtube
 
