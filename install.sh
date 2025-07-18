@@ -1,9 +1,6 @@
 #!/bin/sh
 
-# NOTE: version 7 seems to have changed AVCodecContext layout so it is not supported right now
-# will update when support for 6.1 is dropped
-
-FFMPEG_BUILD="ffmpeg-n6.1-latest-linux64-gpl-shared-6.1"
+FFMPEG_BUILD="ffmpeg-n7.1-latest-linux64-gpl-shared-7.1"
 FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/$FFMPEG_BUILD.tar.xz"
 
 echo DOWLOADING FFMPEG...
