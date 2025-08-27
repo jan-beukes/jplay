@@ -2096,7 +2096,7 @@ Codec_Descriptor_Property :: enum i32 {
 	Reorder    = 3,
 	/**
 	 * Video codec supports separate coding of fields in interlaced frames.
- 	*/
+	*/
 	Fields     = 4,
 	/**
 	 * Subtitle codec is bitmap based
@@ -3779,6 +3779,12 @@ Format_Context :: struct {
 	 */
 	streams:                         [^]^Stream,
 
+	nb_stream_groups:                u32,
+	stream_groups:                   [^]^Stream_Group,
+	nb_chapters:                     u32,
+	chapterts:                       [^]^Chapter,
+
+
 	/**
 	 * input or output URL. Unlike the old filename field, this field has no
 	 * length restriction.
@@ -3860,37 +3866,7 @@ Format_Context :: struct {
 	 */
 	subtitle_codec_id:               Codec_ID,
 
-	/**
-	 * Maximum amount of memory in bytes to use for the index of each stream.
-	 * If the index exceeds this size, entries will be discarded as
-	 * needed to maintain a smaller size. This can lead to slower or less
-	 * accurate seeking (depends on demuxer).
-	 * Demuxers for which a full in-memory index is mandatory will ignore
-	 * this.
-	 * - muxing: unused
-	 * - demuxing: set by user
-	 */
-	max_index_size:                  u32,
-
-	/**
-	 * Maximum amount of memory in bytes to use for buffering frames
-	 * obtained from realtime capture devices.
-	 */
-	max_picture_buffer:              u32,
-
-	/**
-	 * Number of chapters in AVChapter array.
-	 * When muxing, chapters are normally written in the file header,
-	 * so nb_chapters should normally be initialized before write_header
-	 * is called. Some muxers (e.g. mov and mkv) can also write chapters
-	 * in the trailer.  To write chapters in the trailer, nb_chapters
-	 * must be zero when write_header is called and non-zero when
-	 * write_trailer is called.
-	 * - muxing: set by user
-	 * - demuxing: set by libavformat
-	 */
-	nb_chapters:                     u32,
-	chapters:                        ^[^]Chapter,
+	data_codec_id:                   Codec_ID,
 
 	/**
 	 * Metadata that applies to the whole file.
@@ -3961,32 +3937,26 @@ Format_Context :: struct {
 	 *
 	 * Muxing only, set by the caller before avformat_write_header().
 	 */
+
+	max_streams:                     i32,
+	max_index_size:                  u32,
+	max_picture_buffer:              u32,
 	max_interleave_delta:            i64,
 
-	/**
-	 * Allow non-standard and experimental extension
-	 * @see AVCodec_Context.strict_std_compliance
-	 */
-	strict_std_compliance:           i32,
-
-	/**
-	 * Flags indicating events happening on the file, a combination of
-	 * AVFMT_EVENT_FLAG_*.
-	 *
-	 * - demuxing: may be set by the demuxer in avformat_open_input(),
-	 *   avformat_find_stream_info() and av_read_frame(). Flags must be cleared
-	 *   by the user once the event has been handled.
-	 * - muxing: may be set by the user after avformat_write_header() to
-	 *   indicate a user-triggered event.  The muxer will clear the flags for
-	 *   events it has handled in av_[interleaved]_write_frame().
-	 */
-	event_flags:                     Format_Context_Event_Flags,
 
 	/**
 	 * Maximum number of packets to read while waiting for the first timestamp.
 	 * Decoding only.
 	 */
 	max_ts_probe:                    i32,
+
+	max_chunk_duration:              i32,
+	max_chunk_size:                  i32,
+
+	max_probe_packets:               i32,
+	strict_std_compliance:           i32,
+
+	event_flags:                     Event_Flag,
 
 	/**
 	 * Avoid negative timestamps during muxing.
@@ -3998,12 +3968,6 @@ Format_Context :: struct {
 	avoid_negative_ts:               Avoid_Negative_TS_Flag,
 
 	/**
-	 * Transport stream id.
-	 * This will be moved into demuxer private options. Thus no API/ABI compatibility
-	 */
-	ts_id:                           i32,
-
-	/**
 	 * Audio preload in microseconds.
 	 * Note, not all formats support this and unpredictable things may happen if it is used when not supported.
 	 * - encoding: Set by user
@@ -4011,21 +3975,6 @@ Format_Context :: struct {
 	 */
 	audio_preload:                   i32,
 
-	/**
-	 * Max chunk time in microseconds.
-	 * Note, not all formats support this and unpredictable things may happen if it is used when not supported.
-	 * - encoding: Set by user
-	 * - decoding: unused
-	 */
-	max_chunk_duration:              i32,
-
-	/**
-	 * Max chunk size in bytes
-	 * Note, not all formats support this and unpredictable things may happen if it is used when not supported.
-	 * - encoding: Set by user
-	 * - decoding: unused
-	 */
-	max_chunk_size:                  i32,
 
 	/**
 	 * forces the use of wallclock timestamps as pts/dts of packets
@@ -4035,11 +3984,8 @@ Format_Context :: struct {
 	 */
 	use_wallclock_as_timestamps:     i32,
 
-	/**
-	 * avio flags, used to force AVIO_FLAG_DIRECT.
-	 * - encoding: unused
-	 * - decoding: Set by user
-	 */
+	skip_estimate_duration_from_pts: i32,
+
 	avio_flags:                      i32,
 
 	/**
@@ -4109,6 +4055,8 @@ Format_Context :: struct {
 	 * - decoding: set by user
 	 */
 	format_whitelist:                cstring,
+
+	protocol_blacklist:              cstring,
 
 	/**
 	 * IO repositioned flag.
@@ -4183,19 +4131,6 @@ Format_Context :: struct {
 	dump_separator:                  cstring,
 
 	/**
-	 * Forced Data codec_id.
-	 * Demuxing: Set by user.
-	 */
-	data_codec_id:                   Codec_ID,
-
-	/**
-	 * ',' separated list of allowed protocols.
-	 * - encoding: unused
-	 * - decoding: set by user
-	 */
-	protocol_whitelist:              cstring,
-
-	/**
 	 * A callback for opening new IO streams.
 	 *
 	 * Whenever a muxer or a demuxer needs to open an IO stream (typically from
@@ -4224,45 +4159,9 @@ Format_Context :: struct {
 	) -> i32,
 	io_close:                        #type proc(ctx: ^Format_Context, pb: ^IO_Context),
 
-	/**
-	 * ',' separated list of disallowed protocols.
-	 * - encoding: unused
-	 * - decoding: set by user
-	 */
-	protocol_blacklist:              cstring,
-
-	/**
-	 * The maximum number of streams.
-	 * - encoding: unused
-	 * - decoding: set by user
-	 */
-	max_streams:                     i32,
-
-	/**
-	 * Skip duration calcuation in estimate_timings_from_pts.
-	 * - encoding: unused
-	 * - decoding: set by user
-	 */
-	skip_estimate_duration_from_pts: i32,
-
-	/**
-	 * Maximum number of packets that can be probed
-	 * - encoding: unused
-	 * - decoding: set by user
-	 */
-	max_probe_packets:               i32,
-	/**
-     * A callback for closing the streams opened with AVFormatContext.io_open().
-     *
-     * Using this is preferred over io_close, because this can return an error.
-     * Therefore this callback is used instead of io_close by the generic
-     * libavformat code if io_close is NULL or the default.
-     *
-     * @param s the format context
-     * @param pb IO context to be closed and freed
-     * @return 0 on success, a negative AVERROR code on failure
-     */
 	io_close2:                       #type proc(s: ^Format_Context, pb: ^IO_Context) -> i32,
+
+	duration_probesize:              i64,
 }
 
 Stream_Parse_Type :: enum i32 {
@@ -4480,6 +4379,9 @@ Stream :: struct {
 	r_frame_rate:        Rational,
 	pts_wrap_bits:       i32,
 }
+
+// TODO: implement
+Stream_Group :: struct {}
 
 Packet_Flag :: enum i32 {
 	Key        = 0, ///< The packet contains a keyframe
@@ -6059,7 +5961,7 @@ Frame :: struct {
 
 	/**
 	 * @name Video dimensions
-	 * 	 */
+	 *	 */
 	width:                  i32,
 	height:                 i32,
 
@@ -6203,7 +6105,7 @@ _Base	 */
 
 	/**
 	 * AVBufferRef for free use by the API user. FFmpeg will never check the
-	 * contents of the buffer ref. 	 */
+	 * contents of the buffer ref.	 */
 	opaque_ref:             ^Buffer_Ref,
 
 	/**
